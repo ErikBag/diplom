@@ -5,48 +5,31 @@ import csv
 import json
 
 def fix_and_convert(pdb_file, output_mol2, chains=None):
-    """
-    Конвертирует PDB файл в MOL2, сохраняя только указанные цепи
-    
-    Параметры:
-        pdb_file (str): Путь к входному PDB файлу
-        output_mol2 (str): Путь для сохранения MOL2 файла
-        chains (list, optional): Список цепей для сохранения (например ['A', 'B']). 
-                                Если None, сохраняются все цепи.
-    Возвращает:
-        bool: True если конвертация успешна, False в случае ошибки
-    """
     try:
-        # Загрузка молекулы из PDB
         mol = Chem.MolFromPDBFile(pdb_file, sanitize=False, removeHs=False, proximityBonding=False)
         if mol is None:
             raise ValueError("Не удалось загрузить файл")
         
-        # Фильтрация по цепям если указаны
         if chains is not None:
-            chains = set(chains)  # Для быстрого поиска
+            chains = set(chains)
             atoms_to_keep = []
             for atom in mol.GetAtoms():
                 res = atom.GetPDBResidueInfo()
                 if res and res.GetChainId() in chains:
                     atoms_to_keep.append(atom.GetIdx())
             
-            # Создаем подмолекулу только с выбранными цепями
             mol = Chem.RWMol(mol)
             atoms_to_keep = sorted(atoms_to_keep, reverse=True)
             for idx in range(mol.GetNumAtoms()-1, -1, -1):
                 if idx not in atoms_to_keep:
                     mol.RemoveAtom(idx)
         
-        # Восстановление химической структуры
         Chem.SanitizeMol(mol)
         mol.UpdatePropertyCache()
         
-        # Сохранение во временный PDB
         temp_file = "temp_fixed.pdb"
         Chem.MolToPDBFile(mol, temp_file)
         
-        # Конвертация через Open Babel
         result = subprocess.run(
             ["obabel", temp_file, "-O", output_mol2], 
             capture_output=True, 
@@ -54,7 +37,6 @@ def fix_and_convert(pdb_file, output_mol2, chains=None):
             check=True
         )
         
-        # Удаление временного файла
         if os.path.exists(temp_file):
             os.remove(temp_file)
         
@@ -134,15 +116,21 @@ dataset_dict = {'PDBbind v2020': 'PDBbind',
                 'Affinity Benchmark v5.5': 'Affinity-Benchmark', 
                 'SAbDab': 'SAbDab',
                 'ATLAS': 'ATLAS'}
-out_dir = 'PPB-Affinity2'
+out_main_dir = 'PPB-Affinity3'
+if not os.path.exists(out_main_dir):
+    os.mkdir(out_main_dir)
+if not os.path.exists(out_main_dir + '/core-set'):
+    os.mkdir(out_main_dir + '/core-set')
+if not os.path.exists(out_main_dir + '/refined-set'):
+    os.mkdir(out_main_dir + '/refined-set')
 
 for row in ppb_affinity:
     if row['Subgroup'] == 'Antibody-Antigen':
-        out_dir = 'PPB-Affinity2/core-set'
+        out_dir = out_main_dir + '/core-set'
     else:
-        out_dir = 'PPB-Affinity2/refined-set'
+        out_dir = out_main_dir + '/refined-set'
     dir = dataset_dict[row['Source Data Set']]
-    all_dir = f'PDB/{dir}/{dir}-MUT'
+    all_dir = f'PDB/{dir}-MUT'
     pdb = row['PDB']
     mutations = row['Mutations'].replace(" ", "")
     if mutations == '':
